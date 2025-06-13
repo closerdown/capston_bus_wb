@@ -11,12 +11,12 @@ import requests
 
 st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
 
-# 1. 환경변수에서 firebase 서비스 계정 정보 읽기
+# 1. 환경변수에서 firebase 서비스 계정 정보 읽기 및 None 제거
 firebase_info = {
     "type": os.getenv("firebase_type"),
     "project_id": os.getenv("firebase_project_id"),
     "private_key_id": os.getenv("firebase_private_key_id"),
-    "private_key": os.getenv("firebase_private_key").replace("\\n", "\n") if os.getenv("firebase_private_key") else None,
+    "private_key": os.getenv("firebase_private_key"),
     "client_email": os.getenv("firebase_client_email"),
     "client_id": os.getenv("firebase_client_id"),
     "auth_uri": os.getenv("firebase_auth_uri"),
@@ -25,6 +25,13 @@ firebase_info = {
     "client_x509_cert_url": os.getenv("firebase_client_x509_cert_url"),
     "universe_domain": os.getenv("firebase_universe_domain"),
 }
+
+# None 값 제거 (credentials.Certificate는 None 값 허용 안 함)
+firebase_info = {k: v for k, v in firebase_info.items() if v is not None}
+
+# private_key 줄바꿈 처리
+if "private_key" in firebase_info:
+    firebase_info["private_key"] = firebase_info["private_key"].replace("\\n", "\n")
 
 # 2. 앱 초기화 (중복 초기화 방지)
 if not firebase_admin._apps:
@@ -225,31 +232,31 @@ elif selected_page == "Search Bus":
             congestion = data.get("total_congestion", 0)
             timestamp = data.get("timestamp")
             timestamp = timestamp.to_datetime() if hasattr(timestamp, "to_datetime") else None
-            bg_color, status_text = congestion_status_style(congestion)
+            color, status = congestion_status_style(congestion)
             st.markdown(f"""
-                <div style="background-color: {bg_color}; padding: 20px; border-radius: 10px; color: white; text-align: center;">
-                    <h2>{bus_number}번 버스 혼잡도</h2>
-                    <h1>{congestion:.1f}%</h1>
-                    <p>{status_text}</p>
-                    <p style="font-size: 12px;">최종 업데이트: {timestamp.strftime('%Y-%m-%d %H:%M:%S') if timestamp else '정보 없음'}</p>
+                <div style="background-color:{color}; padding: 10px; border-radius:6px;">
+                    <h3>{bus_number}번 버스 혼잡도: {congestion:.1f}% ({status})</h3>
+                    <p>측정시간: {timestamp.strftime('%Y-%m-%d %H:%M:%S') if timestamp else '정보 없음'}</p>
                 </div>
             """, unsafe_allow_html=True)
-            if st.button("즐겨찾기 추가"):
+            if st.button("즐겨찾기에 추가"):
                 add_favorite_bus(bus_number)
-                st.success(f"{bus_number}번 버스가 즐겨찾기에 추가되었습니다.")
+                st.success("즐겨찾기에 추가되었습니다.")
         else:
-            st.warning("해당 버스 혼잡도 정보를 찾을 수 없습니다.")
+            st.warning("해당 버스 혼잡도 정보가 없습니다.")
 
 elif selected_page == "Search Station":
     st.title("🔍 버스 정류장 검색")
-    stations_all = get_all_stations()
-    query = st.text_input("정류장 이름 입력")
+    stations = get_all_stations()
+    query = st.text_input("정류장 이름 검색")
     if query:
-        matched_stations = search_stations_local(stations_all, query)
-        if matched_stations:
-            for s in matched_stations:
-                st.write(f"- {s['name']} (위도: {s['lat']}, 경도: {s['lon']})")
+        results = search_stations_local(stations, query)
+        if results:
+            st.write(f"검색 결과 {len(results)}건:")
+            for s in results:
+                st.write(f"- {s['name']} (위도: {s['lat']:.5f}, 경도: {s['lon']:.5f})")
         else:
             st.info("검색 결과가 없습니다.")
-    else:
-        st.info("검색어를 입력하세요.")
+
+    if st.button("새로고침"):
+        rerun()
