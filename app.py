@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -7,13 +8,23 @@ from streamlit.runtime.scriptrunner import RerunException, RerunData
 import folium
 from streamlit_folium import st_folium
 import requests
-import toml
 
 st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
 
-# 1. toml 파일에서 firebase 서비스 계정 정보 읽기
-config = toml.load("secret.toml")
-firebase_info = config["firebase"]
+# 1. 환경변수에서 firebase 서비스 계정 정보 읽기
+firebase_info = {
+    "type": os.getenv("firebase_type"),
+    "project_id": os.getenv("firebase_project_id"),
+    "private_key_id": os.getenv("firebase_private_key_id"),
+    "private_key": os.getenv("firebase_private_key").replace("\\n", "\n") if os.getenv("firebase_private_key") else None,
+    "client_email": os.getenv("firebase_client_email"),
+    "client_id": os.getenv("firebase_client_id"),
+    "auth_uri": os.getenv("firebase_auth_uri"),
+    "token_uri": os.getenv("firebase_token_uri"),
+    "auth_provider_x509_cert_url": os.getenv("firebase_auth_provider_x509_cert_url"),
+    "client_x509_cert_url": os.getenv("firebase_client_x509_cert_url"),
+    "universe_domain": os.getenv("firebase_universe_domain"),
+}
 
 # 2. 앱 초기화 (중복 초기화 방지)
 if not firebase_admin._apps:
@@ -191,11 +202,9 @@ if selected_page == "Home":
         else:
             st.info("표시할 데이터가 없습니다.")
 
-        # 현재 위치 위도/경도 텍스트만 표시 (지도 마커 없음)
         lat, lon = get_ip_location()
         st.info(f"현재 위치 (위도, 경도): ({lat:.5f}, {lon:.5f})")
 
-        # 정류장 위치만 지도에 마커로 표시
         stations = get_all_stations()
         m = folium.Map(location=[lat, lon], zoom_start=13)
         for s in stations:
@@ -210,54 +219,37 @@ elif selected_page == "Search Bus":
     bus_number = st.text_input("버스 번호 입력", placeholder="예: 314")
 
     if bus_number:
-        st.success(f"{bus_number}번 버스를 검색했습니다.")
-
-        if st.button("⭐ 즐겨찾기에 추가"):
-            add_favorite_bus(bus_number)
-            st.success("추가 완료!")
-            rerun()
-
-        congestion_data = get_congestion_by_bus_number(bus_number)
-        if congestion_data:
-            congestion = congestion_data.get('total_congestion', 0)
-            timestamp = congestion_data.get('timestamp')
-            timestamp = timestamp.to_datetime() if hasattr(timestamp, 'to_datetime') else None
+        st.success(f"{bus_number}번 버스 조회 중...")
+        data = get_congestion_by_bus_number(bus_number)
+        if data:
+            congestion = data.get("total_congestion", 0)
+            timestamp = data.get("timestamp")
+            timestamp = timestamp.to_datetime() if hasattr(timestamp, "to_datetime") else None
             bg_color, status_text = congestion_status_style(congestion)
             st.markdown(f"""
-            <div style="background-color: {bg_color}; padding: 15px; border-radius: 8px;">
-            혼잡도: <b>{congestion:.1f}%</b> ({status_text})<br>
-            최근 시간: {timestamp.strftime('%Y-%m-%d %H:%M:%S') if timestamp else '정보 없음'}
-            </div>
+                <div style="background-color: {bg_color}; padding: 20px; border-radius: 10px; color: white; text-align: center;">
+                    <h2>{bus_number}번 버스 혼잡도</h2>
+                    <h1>{congestion:.1f}%</h1>
+                    <p>{status_text}</p>
+                    <p style="font-size: 12px;">최종 업데이트: {timestamp.strftime('%Y-%m-%d %H:%M:%S') if timestamp else '정보 없음'}</p>
+                </div>
             """, unsafe_allow_html=True)
+            if st.button("즐겨찾기 추가"):
+                add_favorite_bus(bus_number)
+                st.success(f"{bus_number}번 버스가 즐겨찾기에 추가되었습니다.")
         else:
-            st.warning("해당 버스 데이터 없음")
+            st.warning("해당 버스 혼잡도 정보를 찾을 수 없습니다.")
 
 elif selected_page == "Search Station":
-    st.title("🗺️ 정류장 이름으로 검색")
-
-    lat, lon = get_ip_location()
-
-    query = st.text_input("정류장명을 입력하세요")
-
-    all_stations = get_all_stations()
-
+    st.title("🔍 버스 정류장 검색")
+    stations_all = get_all_stations()
+    query = st.text_input("정류장 이름 입력")
     if query:
-        results = search_stations_local(all_stations, query)
-        st.write(f"검색 결과: {len(results)}개")
-        if results:
-            # 정류장명 텍스트 목록 먼저 출력
-            st.subheader("검색된 정류장 목록")
-            for s in results:
-                st.write(f"- {s['name']}")
-
-            # 그 아래에 지도 출력 (마커만)
-            m = folium.Map(location=[lat, lon], zoom_start=13)
-            for s in results:
-                folium.Marker([s["lat"], s["lon"]], popup=s["name"], icon=folium.Icon(color="green", icon="info-sign")).add_to(m)
-            st_folium(m, width=700, height=500)
+        matched_stations = search_stations_local(stations_all, query)
+        if matched_stations:
+            for s in matched_stations:
+                st.write(f"- {s['name']} (위도: {s['lat']}, 경도: {s['lon']})")
         else:
-            st.write("검색 결과가 없습니다.")
-
-
-st.markdown("---")
-st.markdown("Developed for Capstone Project | © Your University")
+            st.info("검색 결과가 없습니다.")
+    else:
+        st.info("검색어를 입력하세요.")
