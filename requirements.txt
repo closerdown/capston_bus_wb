@@ -4,3 +4,4 @@ matplotlib
 requests
 folium
 streamlit-folium
+toml
