@@ -7,7 +7,7 @@ from streamlit.runtime.scriptrunner import RerunException, RerunData
 import folium
 from streamlit_folium import st_folium
 import requests
-
+import toml
 
 st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
 
