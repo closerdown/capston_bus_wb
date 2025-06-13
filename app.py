@@ -1,5 +1,7 @@
 import os
 from dotenv import load_dotenv
+load_dotenv()  # .env 파일에서 환경변수 로드 (맨 위에 위치시켜야 함)
+
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -261,4 +263,3 @@ elif selected_page == "Search Station":
 
     if st.button("새로고침"):
         rerun()
-load_dotenv()
