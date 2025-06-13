@@ -8,12 +8,19 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
+
 st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
 
-# Firebase 초기화
+# 1. toml 파일에서 firebase 서비스 계정 정보 읽기
+config = toml.load("secret.toml")
+firebase_info = config["firebase"]
+
+# 2. 앱 초기화 (중복 초기화 방지)
 if not firebase_admin._apps:
-    cred = credentials.Certificate("account_key.json")
+    cred = credentials.Certificate(firebase_info)
     firebase_admin.initialize_app(cred)
+
+# 3. Firestore 클라이언트 생성
 db = firestore.client()
 
 USER_ID = "anonymous_user"
