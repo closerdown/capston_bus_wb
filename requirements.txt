@@ -1,0 +1,6 @@
+streamlit
+firebase-admin
+matplotlib
+requests
+folium
+streamlit-folium
