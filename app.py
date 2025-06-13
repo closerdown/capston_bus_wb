@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -260,3 +261,4 @@ elif selected_page == "Search Station":
 
     if st.button("새로고침"):
         rerun()
+load_dotenv()
