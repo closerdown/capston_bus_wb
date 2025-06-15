@@ -66,11 +66,12 @@ def congestion_status_style(congestion):
 def rerun():
     st.experimental_rerun()
 
-query_params = st.experimental_get_query_params()
+# 여기만 변경: st.experimental_get_query_params() → st.query_params
+query_params = st.query_params
 if "remove" in query_params:
     bus_to_remove = query_params["remove"][0]
     remove_favorite_bus(bus_to_remove)
-    st.experimental_set_query_params()
+    st.experimental_set_query_params()  # 쿼리 파라미터 초기화
     rerun()
 
 with st.sidebar:
