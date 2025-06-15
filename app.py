@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from streamlit.runtime.scriptrunner import RerunException, RerunData
 import folium
 from streamlit_folium import st_folium
-import requests
 
 # Streamlit 설정
 st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
@@ -23,7 +22,8 @@ db = firestore.client()
 USER_ID = "anonymous_user"
 DEFAULT_LOCATION = (36.3504, 127.3845)  # 대전 중심 좌표
 
-# Firebase 함수들
+# Firestore 함수 캐시 적용
+
 def add_favorite_bus(bus_no):
     ref = db.collection("favorites").document(USER_ID)
     doc = ref.get()
@@ -31,6 +31,7 @@ def add_favorite_bus(bus_no):
     if bus_no not in favorites:
         favorites.append(bus_no)
         ref.set({"favorite_buses": favorites})
+    # 캐시 초기화 필요 (아래 참고)
 
 def remove_favorite_bus(bus_no):
     ref = db.collection("favorites").document(USER_ID)
@@ -40,22 +41,27 @@ def remove_favorite_bus(bus_no):
         if bus_no in favorites:
             favorites.remove(bus_no)
             ref.set({"favorite_buses": favorites})
+    # 캐시 초기화 필요 (아래 참고)
 
+@st.cache_data(ttl=300)  # 5분 캐시 유지
 def get_favorite_buses():
     doc = db.collection("favorites").document(USER_ID).get()
     return doc.to_dict().get("favorite_buses", []) if doc.exists else []
 
+@st.cache_data(ttl=300)
 def get_congestion_by_bus_number(bus_no):
     try:
         docs = db.collection("bus_congestion")\
             .where("bus_number", "==", bus_no)\
             .order_by("timestamp", direction=firestore.Query.DESCENDING)\
             .limit(1).stream()
-        return next(docs, None).to_dict()
+        doc = next(docs, None)
+        return doc.to_dict() if doc else None
     except Exception as e:
         st.error(f"Firestore 쿼리 에러: {e}")
         return None
 
+@st.cache_data(ttl=300)
 def get_congestion_history(bus_no, hours=24):
     try:
         threshold = datetime.utcnow() - timedelta(hours=hours)
@@ -64,7 +70,8 @@ def get_congestion_history(bus_no, hours=24):
             .where("timestamp", ">=", threshold)\
             .order_by("timestamp")\
             .stream()
-        return [{"timestamp": d.to_dict().get("timestamp").to_datetime(), "total_congestion": d.to_dict().get("total_congestion", 0)} for d in docs]
+        return [{"timestamp": d.to_dict().get("timestamp").to_datetime(), 
+                 "total_congestion": d.to_dict().get("total_congestion", 0)} for d in docs]
     except Exception as e:
         st.error(f"기록 조회 실패: {e}")
         return []
@@ -93,10 +100,17 @@ def congestion_status_style(congestion):
     else:
         return "#4caf50", "여유"
 
+# 캐시 무효화용 함수 (즐겨찾기 추가/삭제 후 호출 필요)
+def clear_favorites_cache():
+    get_favorite_buses.clear()
+    # 해당 버스들의 혼잡도도 새로고침 필요할 수 있음
+    # 캐시는 자동 만료되지만 즉시 반영 원하면 직접 clear 호출 가능
+
 # URL 파라미터 처리
 query_params = st.query_params
 if "remove" in query_params:
     remove_favorite_bus(query_params["remove"][0])
+    clear_favorites_cache()
     st.experimental_set_query_params()
     rerun()
 
@@ -163,6 +177,7 @@ if selected_page == "Home":
         st_folium(m, width=700, height=500)
 
     if st.button("새로고침"):
+        clear_favorites_cache()
         rerun()
 
 elif selected_page == "Search Bus":
@@ -183,7 +198,8 @@ elif selected_page == "Search Bus":
             """, unsafe_allow_html=True)
             if st.button("즐겨찾기 추가"):
                 add_favorite_bus(bus_no)
-                st.success("추가되었습니다.")
+                clear_favorites_cache()
+                st.success("즐겨찾기에 추가되었습니다.")
         else:
             st.warning("혼잡도 정보 없음")
 
@@ -201,4 +217,5 @@ elif selected_page == "Search Station":
             st.info("검색 결과 없음")
 
     if st.button("새로고침"):
+        clear_favorites_cache()
         rerun()
