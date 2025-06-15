@@ -1,7 +1,3 @@
-import os
-from dotenv import load_dotenv
-load_dotenv()  # .env 파일에서 환경변수 로드 (맨 위에 위치시켜야 함)
-
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -14,27 +10,9 @@ import requests
 
 st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
 
-# 1. 환경변수에서 firebase 서비스 계정 정보 읽기 및 None 제거
-firebase_info = {
-    "type": os.getenv("firebase_type"),
-    "project_id": os.getenv("firebase_project_id"),
-    "private_key_id": os.getenv("firebase_private_key_id"),
-    "private_key": os.getenv("firebase_private_key"),
-    "client_email": os.getenv("firebase_client_email"),
-    "client_id": os.getenv("firebase_client_id"),
-    "auth_uri": os.getenv("firebase_auth_uri"),
-    "token_uri": os.getenv("firebase_token_uri"),
-    "auth_provider_x509_cert_url": os.getenv("firebase_auth_provider_x509_cert_url"),
-    "client_x509_cert_url": os.getenv("firebase_client_x509_cert_url"),
-    "universe_domain": os.getenv("firebase_universe_domain"),
-}
-
-# None 값 제거 (credentials.Certificate는 None 값 허용 안 함)
-firebase_info = {k: v for k, v in firebase_info.items() if v is not None}
-
-# private_key 줄바꿈 처리
-if "private_key" in firebase_info:
-    firebase_info["private_key"] = firebase_info["private_key"].replace("\\n", "\n")
+# 1. secrets.toml에서 firebase 서비스 계정 정보 불러오기
+firebase_info = dict(st.secrets["firebase"])
+firebase_info["private_key"] = firebase_info["private_key"].replace("\\n", "\n")
 
 # 2. 앱 초기화 (중복 초기화 방지)
 if not firebase_admin._apps:
@@ -138,7 +116,6 @@ def search_stations_local(stations, query):
 def rerun():
     raise RerunException(RerunData())
 
-# 쿼리 파라미터에서 삭제 요청 처리
 query_params = st.query_params
 if "remove" in query_params:
     bus_to_remove = query_params["remove"][0]
