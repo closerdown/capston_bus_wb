@@ -115,14 +115,6 @@ if selected_page == "Home":
         else:
             st.info("표시할 데이터가 없습니다.")
 
-        # 지도 표시 (전체 정류장)
-        stations = get_all_stations()
-        m = folium.Map(location=DEFAULT_LOCATION, zoom_start=13)
-        for s in stations:
-            folium.Marker([s["lat"], s["lon"]], popup=s["name"],
-                          icon=folium.Icon(color="blue", icon="bus", prefix="fa")).add_to(m)
-        st_folium(m, width=700)
-
 # ------------------- Search Bus -------------------
 elif selected_page == "Search Bus":
     st.title("버스 번호로 검색")
@@ -149,7 +141,6 @@ elif selected_page == "Search Station":
     search_name = st.text_input("정류장명 입력")
     filtered = [s for s in stations if search_name in s["name"]] if search_name else []
 
-    # 위도, 경도 텍스트 표시 제거했음
     for s in filtered:
         st.write(s['name'])
 
