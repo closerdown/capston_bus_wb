@@ -58,7 +58,7 @@ if "remove" in query_params:
     else:
         st.error("삭제 실패")
     st.experimental_set_query_params()
-    st.rerun()
+    st.experimental_rerun()
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -115,7 +115,7 @@ if selected_page == "Home":
         else:
             st.info("표시할 데이터가 없습니다.")
 
-        # 지도 표시
+        # 지도 표시 (전체 정류장)
         stations = get_all_stations()
         m = folium.Map(location=DEFAULT_LOCATION, zoom_start=13)
         for s in stations:
@@ -136,7 +136,7 @@ elif selected_page == "Search Bus":
             if st.button("즐겨찾기에 추가"):
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("추가 실패")
         else:
@@ -147,6 +147,19 @@ elif selected_page == "Search Station":
     st.title("정류장 검색")
     stations = get_all_stations()
     search_name = st.text_input("정류장명 입력")
-    filtered = [s for s in stations if search_name in s["name"]] if search_name else stations
+    filtered = [s for s in stations if search_name in s["name"]] if search_name else []
+
+    # 위도, 경도 텍스트 표시 제거했음
     for s in filtered:
-        st.write(f"{s['name']} (위도: {s['lat']}, 경도: {s['lon']})")
+        st.write(s['name'])
+
+    if filtered:
+        center_lat = filtered[0]['lat']
+        center_lon = filtered[0]['lon']
+        m = folium.Map(location=(center_lat, center_lon), zoom_start=14)
+        for s in filtered:
+            folium.Marker([s["lat"], s["lon"]], popup=s["name"],
+                          icon=folium.Icon(color="blue", icon="bus", prefix="fa")).add_to(m)
+        st_folium(m, width=700)
+    else:
+        st.info("검색 결과가 없습니다.")
