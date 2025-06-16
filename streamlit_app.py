@@ -50,16 +50,17 @@ def congestion_status_style(congestion):
         return "#4caf50", "여유"
 
 # ----------------- 쿼리 파라미터 처리 -----------------
-query_params = st.query_params  # 읽기 전용
-
+query_params = st.query_params
 if "remove" in query_params:
-    bus_to_remove = query_params["remove"][0]
+    bus_to_remove = query_params["remove"]
+    if isinstance(bus_to_remove, list):
+        bus_to_remove = bus_to_remove[0]
     if remove_favorite_bus(bus_to_remove):
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
-    st.set_query_params()  # 쿼리 파라미터 초기화
-    st.experimental_rerun()
+    st.query_params.clear()
+    st.stop()
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -70,10 +71,9 @@ with st.sidebar:
 if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
 
-    # 새로고침 버튼
     if st.button("🔄 새로고침"):
-        st.set_query_params(refresh=datetime.now().isoformat())
-        st.experimental_rerun()
+        st.query_params["refresh"] = datetime.now().isoformat()
+        st.rerun()
 
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
@@ -103,7 +103,6 @@ if selected_page == "Home":
     else:
         st.info("즐겨찾기한 버스가 없습니다.")
 
-    # 선택된 버스 혼잡도 추이 그래프
     if st.session_state.selected_bus:
         st.markdown("---")
         st.subheader(f"🕒 {st.session_state.selected_bus} 버스 혼잡도 추이")
@@ -135,8 +134,8 @@ elif selected_page == "Search Bus":
             if st.button("즐겨찾기에 추가"):
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    st.set_query_params(refresh=datetime.now().isoformat())
-                    st.experimental_rerun()
+                    st.query_params["refresh"] = datetime.now().isoformat()
+                    st.rerun()
                 else:
                     st.error("추가 실패")
         else:
