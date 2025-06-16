@@ -68,6 +68,11 @@ with st.sidebar:
 # ---------------------- Home ----------------------
 if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
+
+    # 수동 새로고침 버튼
+    if st.button("🔄 새로고침"):
+        st.experimental_rerun()
+
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
 
