@@ -50,15 +50,16 @@ def congestion_status_style(congestion):
         return "#4caf50", "여유"
 
 # ----------------- 쿼리 파라미터 처리 -----------------
-query_params = st.query_params
+query_params = st.experimental_get_query_params()
 if "remove" in query_params:
     bus_to_remove = query_params["remove"][0]
     if remove_favorite_bus(bus_to_remove):
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
+    # 쿼리 파라미터 초기화 후 앱 재실행
     st.experimental_set_query_params()
-    st.stop()
+    st.experimental_rerun()
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -72,7 +73,7 @@ if selected_page == "Home":
     # ✅ 새로고침 버튼
     if st.button("🔄 새로고침"):
         st.experimental_set_query_params(refresh=datetime.now().isoformat())
-        st.stop()
+        st.experimental_rerun()
 
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
@@ -135,7 +136,7 @@ elif selected_page == "Search Bus":
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
                     st.experimental_set_query_params(refresh=datetime.now().isoformat())
-                    st.stop()
+                    st.experimental_rerun()
                 else:
                     st.error("추가 실패")
         else:
