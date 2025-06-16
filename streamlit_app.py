@@ -51,14 +51,14 @@ def congestion_status_style(congestion):
 
 # ----------------- 쿼리 파라미터 처리 -----------------
 query_params = st.query_params
-if "remove" in query_params:
-    bus_to_remove = query_params["remove"][0]
+bus_to_remove = query_params.get("remove", [None])[0]
+if bus_to_remove:
     if remove_favorite_bus(bus_to_remove):
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
     st.experimental_set_query_params()
-    st.experimental_rerun()
+    st.stop()  # rerun 대신 stop으로 안전하게 종료 후 재실행 유도
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -69,7 +69,7 @@ with st.sidebar:
 if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
 
-    # 수동 새로고침 버튼
+    # 🔄 새로고침 버튼
     if st.button("🔄 새로고침"):
         st.experimental_rerun()
 
