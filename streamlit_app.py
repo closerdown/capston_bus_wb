@@ -59,9 +59,12 @@ if "remove" in query_params:
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
-    # 쿼리 파라미터 초기화 후 새로고침
-    st.experimental_set_query_params()
+    st.experimental_set_query_params()  # 쿼리 파라미터 초기화
     st.experimental_rerun()
+
+# 세션 상태 초기화
+if "refreshed" not in st.session_state:
+    st.session_state.refreshed = False
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -73,8 +76,10 @@ if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
 
     if st.button("🔄 새로고침"):
-        st.experimental_set_query_params(refresh=datetime.now().isoformat())
-        st.experimental_rerun()
+        if not st.session_state.refreshed:
+            st.experimental_set_query_params(refresh=datetime.now().isoformat())
+            st.session_state.refreshed = True
+            st.experimental_rerun()
 
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
@@ -139,8 +144,11 @@ elif selected_page == "Search Bus":
 
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    st.experimental_set_query_params(refresh=datetime.now().isoformat())
-                    st.experimental_rerun()
+                    # 새로고침 시 중복 방지 위해 session_state 사용
+                    if not st.session_state.get("refreshed_search", False):
+                        st.experimental_set_query_params(refresh=datetime.now().isoformat())
+                        st.session_state.refreshed_search = True
+                        st.experimental_rerun()
                 else:
                     st.error("즐겨찾기 추가 실패")
             else:
