@@ -50,7 +50,7 @@ def congestion_status_style(congestion):
         return "#4caf50", "여유"
 
 # ----------------- 쿼리 파라미터 처리 -----------------
-query_params = st.experimental_get_query_params()
+query_params = st.query_params
 
 # refresh 파라미터가 있으면 새로고침 상태 초기화
 if "refresh" in query_params:
