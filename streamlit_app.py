@@ -63,8 +63,6 @@ if bus_to_remove:
     st.rerun()
 
 # 세션 상태 초기화
-if "refreshed" not in st.session_state:
-    st.session_state.refreshed = False
 if "refreshed_search" not in st.session_state:
     st.session_state.refreshed_search = False
 
@@ -76,10 +74,6 @@ with st.sidebar:
 # ---------------------- Home ----------------------
 if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
-
-    if st.button("🔄 새로고침"):
-        st.session_state.refreshed = True
-        st.rerun()
 
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
