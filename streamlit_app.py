@@ -161,3 +161,6 @@ elif selected_page == "Search Station":
         st_folium(m, width=700)
     else:
         st.info("검색 결과가 없습니다.")
+
+favorites = get_favorite_buses()
+st.write("즐겨찾기:", favorites)  # 이 라인을 추가해 출력 확인
