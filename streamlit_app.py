@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
 
@@ -59,8 +59,9 @@ if "remove" in query_params:
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
-    st.query_params.clear()
-    st.stop()
+    # 쿼리 파라미터 초기화 후 새로고침
+    st.experimental_set_query_params()
+    st.experimental_rerun()
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -72,8 +73,8 @@ if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
 
     if st.button("🔄 새로고침"):
-        st.query_params["refresh"] = datetime.now().isoformat()
-        st.rerun()
+        st.experimental_set_query_params(refresh=datetime.now().isoformat())
+        st.experimental_rerun()
 
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
@@ -124,22 +125,26 @@ if selected_page == "Home":
 # ------------------- Search Bus -------------------
 elif selected_page == "Search Bus":
     st.title("버스 번호로 검색")
-    bus_no = st.text_input("버스 번호 입력")
-    if st.button("검색") and bus_no:
-        congestion = get_congestion_by_bus_number(bus_no)
-        if congestion:
-            cong = congestion.get("total_congestion", 0)
-            color, status = congestion_status_style(cong)
-            st.markdown(f"<h2 style='color:{color}'>혼잡도: {cong:.1f}% ({status})</h2>", unsafe_allow_html=True)
-            if st.button("즐겨찾기에 추가"):
+
+    with st.form("bus_search_form"):
+        bus_no = st.text_input("버스 번호 입력")
+        submitted = st.form_submit_button("검색 및 즐겨찾기 추가")
+
+        if submitted and bus_no:
+            congestion = get_congestion_by_bus_number(bus_no)
+            if congestion:
+                cong = congestion.get("total_congestion", 0)
+                color, status = congestion_status_style(cong)
+                st.markdown(f"<h2 style='color:{color}'>혼잡도: {cong:.1f}% ({status})</h2>", unsafe_allow_html=True)
+
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    st.query_params["refresh"] = datetime.now().isoformat()
-                    st.rerun()
+                    st.experimental_set_query_params(refresh=datetime.now().isoformat())
+                    st.experimental_rerun()
                 else:
-                    st.error("추가 실패")
-        else:
-            st.warning("해당 버스에 대한 정보가 없습니다.")
+                    st.error("즐겨찾기 추가 실패")
+            else:
+                st.warning("해당 버스에 대한 정보가 없습니다.")
 
 # ------------------ Search Station -----------------
 elif selected_page == "Search Station":
@@ -161,4 +166,3 @@ elif selected_page == "Search Station":
         st_folium(m, width=700)
     else:
         st.info("검색 결과가 없습니다.")
-
