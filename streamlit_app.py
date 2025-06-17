@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 import folium
 from streamlit_folium import st_folium
 
@@ -50,7 +50,15 @@ def congestion_status_style(congestion):
         return "#4caf50", "여유"
 
 # ----------------- 쿼리 파라미터 처리 -----------------
-query_params = st.query_params
+query_params = st.experimental_get_query_params()
+
+# refresh 파라미터가 있으면 새로고침 상태 초기화
+if "refresh" in query_params:
+    st.session_state.refreshed = False
+    # 쿼리 파라미터 초기화
+    st.experimental_set_query_params()
+    st.experimental_rerun()
+
 if "remove" in query_params:
     bus_to_remove = query_params["remove"]
     if isinstance(bus_to_remove, list):
@@ -59,7 +67,8 @@ if "remove" in query_params:
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
-    st.experimental_set_query_params()  # 쿼리 파라미터 초기화
+    # 쿼리 파라미터 초기화 후 재실행
+    st.experimental_set_query_params()
     st.experimental_rerun()
 
 # 세션 상태 초기화
@@ -144,7 +153,6 @@ elif selected_page == "Search Bus":
 
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    # 새로고침 시 중복 방지 위해 session_state 사용
                     if not st.session_state.get("refreshed_search", False):
                         st.experimental_set_query_params(refresh=datetime.now().isoformat())
                         st.session_state.refreshed_search = True
