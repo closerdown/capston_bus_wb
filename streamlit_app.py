@@ -51,29 +51,22 @@ def congestion_status_style(congestion):
 
 # ----------------- 쿼리 파라미터 처리 -----------------
 query_params = st.query_params
-
-# refresh 파라미터가 있으면 새로고침 상태 초기화
-if "refresh" in query_params:
-    st.session_state.refreshed = False
-    # 쿼리 파라미터 초기화
-    st.experimental_set_query_params()
-    st.experimental_rerun()
-
-if "remove" in query_params:
-    bus_to_remove = query_params["remove"]
+bus_to_remove = query_params.get("remove", None)
+if bus_to_remove:
     if isinstance(bus_to_remove, list):
         bus_to_remove = bus_to_remove[0]
     if remove_favorite_bus(bus_to_remove):
         st.success(f"{bus_to_remove} 삭제됨")
     else:
         st.error("삭제 실패")
-    # 쿼리 파라미터 초기화 후 재실행
-    st.experimental_set_query_params()
-    st.experimental_rerun()
+    st.query_params.clear()
+    st.rerun()
 
 # 세션 상태 초기화
 if "refreshed" not in st.session_state:
     st.session_state.refreshed = False
+if "refreshed_search" not in st.session_state:
+    st.session_state.refreshed_search = False
 
 # ------------------- UI 레이아웃 ----------------------
 with st.sidebar:
@@ -85,10 +78,8 @@ if selected_page == "Home":
     st.title("🚌 대전 시내버스 혼잡도")
 
     if st.button("🔄 새로고침"):
-        if not st.session_state.refreshed:
-            st.experimental_set_query_params(refresh=datetime.now().isoformat())
-            st.session_state.refreshed = True
-            st.experimental_rerun()
+        st.session_state.refreshed = True
+        st.rerun()
 
     favorites = get_favorite_buses()
     st.session_state.setdefault("selected_bus", None)
@@ -153,10 +144,8 @@ elif selected_page == "Search Bus":
 
                 if add_favorite_bus(bus_no):
                     st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    if not st.session_state.get("refreshed_search", False):
-                        st.experimental_set_query_params(refresh=datetime.now().isoformat())
-                        st.session_state.refreshed_search = True
-                        st.experimental_rerun()
+                    st.session_state.refreshed_search = True
+                    st.rerun()
                 else:
                     st.error("즐겨찾기 추가 실패")
             else:
