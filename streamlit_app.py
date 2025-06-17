@@ -1,168 +1,121 @@
-import streamlit as st
-import requests
-import matplotlib.pyplot as plt
-from datetime import datetime
-import folium
-from streamlit_folium import st_folium
-import time  # 추가
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import firebase_admin
+from firebase_admin import credentials, firestore
+from datetime import datetime, timedelta
+import os
+import json
 
-st.set_page_config(layout="centered", page_title="버스 혼잡도 대시보드")
+app = Flask(__name__)
+CORS(app)
 
-API_URL = st.secrets["api"]["base_url"]
-DEFAULT_LOCATION = (36.3504, 127.3845)  # 대전 중심 좌표
+# 환경변수에서 Firebase 서비스 계정 키 불러오기
+account_key_str = os.getenv("account_key")
 
-# --------------------- API 함수 ---------------------
-def get_favorite_buses():
+if not account_key_str:
+    raise RuntimeError("환경변수 'account_key'가 설정되지 않았습니다.")
+
+firebase_info = json.loads(account_key_str)
+
+# private_key 안의 '\\n'을 실제 개행문자 '\n'으로 변환
+if 'private_key' in firebase_info:
+    firebase_info['private_key'] = firebase_info['private_key'].replace('\\n', '\n')
+
+# Firebase 초기화
+if not firebase_admin._apps:
+    cred = credentials.Certificate(firebase_info)
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+USER_ID = "anonymous_user"
+
+@app.route("/favorites", methods=["GET"])
+def get_favorites():
+    doc = db.collection("favorites").document(USER_ID).get()
+    favorites = doc.to_dict().get("favorite_buses", []) if doc.exists else []
+    return jsonify({"favorites": favorites})
+
+@app.route("/favorites", methods=["POST"])
+def add_favorite():
+    bus_no = request.json.get("bus_no")
+    if not bus_no:
+        return jsonify({"error": "bus_no is required"}), 400
+
+    ref = db.collection("favorites").document(USER_ID)
+    doc = ref.get()
+    favorites = doc.to_dict().get("favorite_buses", []) if doc.exists else []
+
+    if bus_no not in favorites:
+        favorites.append(bus_no)
+        ref.set({"favorite_buses": favorites})
+
+    return jsonify({"favorites": favorites})
+
+@app.route("/favorites/<bus_no>", methods=["DELETE"])
+def remove_favorite(bus_no):
+    ref = db.collection("favorites").document(USER_ID)
+    doc = ref.get()
+    if doc.exists:
+        favorites = doc.to_dict().get("favorite_buses", [])
+        if bus_no in favorites:
+            favorites.remove(bus_no)
+            ref.set({"favorite_buses": favorites})
+    return jsonify({"favorites": favorites})
+
+@app.route("/congestion/<bus_no>", methods=["GET"])
+def get_congestion(bus_no):
     try:
-        res = requests.get(f"{API_URL}/favorites", params={"_": time.time()})
-        if res.status_code == 200:
-            return res.json().get("favorites", [])
-    except:
-        pass
-    return []
-
-def add_favorite_bus(bus_no):
-    res = requests.post(f"{API_URL}/favorites", json={"bus_no": bus_no})
-    return res.status_code == 200
-
-def remove_favorite_bus(bus_no):
-    res = requests.delete(f"{API_URL}/favorites/{bus_no}")
-    return res.status_code == 200
-
-def get_congestion_by_bus_number(bus_no):
-    res = requests.get(f"{API_URL}/congestion/{bus_no}", params={"_": time.time()})
-    return res.json() if res.status_code == 200 else None
-
-def get_congestion_history(bus_no, hours=24):
-    res = requests.get(f"{API_URL}/congestion_history/{bus_no}", params={"hours": hours, "_": time.time()})
-    return res.json() if res.status_code == 200 else []
-
-def get_all_stations():
-    res = requests.get(f"{API_URL}/stations", params={"_": time.time()})
-    return res.json() if res.status_code == 200 else []
-
-# ------------------- 유틸 함수 ---------------------
-def congestion_status_style(congestion):
-    if congestion >= 80:
-        return "#ff4b4b", "혼잡"
-    elif congestion >= 50:
-        return "#ffdd57", "보통"
-    else:
-        return "#4caf50", "여유"
-
-# ----------------- 쿼리 파라미터 처리 -----------------
-query_params = st.query_params
-bus_to_remove = query_params.get("remove", None)
-if bus_to_remove:
-    if isinstance(bus_to_remove, list):
-        bus_to_remove = bus_to_remove[0]
-    if remove_favorite_bus(bus_to_remove):
-        st.success(f"{bus_to_remove} 삭제됨")
-    else:
-        st.error("삭제 실패")
-    st.experimental_set_query_params()  # query params 초기화
-    st.experimental_rerun()
-
-# 세션 상태 초기화
-if "refreshed_search" not in st.session_state:
-    st.session_state.refreshed_search = False
-
-# ------------------- UI 레이아웃 ----------------------
-with st.sidebar:
-    st.title("메뉴")
-    selected_page = st.radio("Navigate", ["Home", "Search Bus", "Search Station"], index=0)
-
-# ---------------------- Home ----------------------
-if selected_page == "Home":
-    st.title("🚌 대전 시내버스 혼잡도")
-
-    favorites = get_favorite_buses()
-    st.session_state.setdefault("selected_bus", None)
-
-    if favorites:
-        st.subheader("⭐ 즐겨찾기한 버스")
-        cols = st.columns(len(favorites))
-        for i, bus in enumerate(favorites):
-            data = get_congestion_by_bus_number(bus)
-            with cols[i]:
-                if st.button(bus, key=f"btn_{bus}"):
-                    st.session_state.selected_bus = bus
-                if data:
-                    cong = data.get("total_congestion", 0)
-                    time_ = data.get("timestamp")
-                    dt = datetime.fromisoformat(time_) if time_ else None
-                    color, status = congestion_status_style(cong)
-                    st.markdown(f"""
-                        <div style='background:{color}; padding:10px; border-radius:6px;'>
-                            <b>{cong:.1f}%</b> ({status})<br/>
-                            <small>{dt.strftime('%m-%d %H:%M:%S') if dt else '정보 없음'}</small><br/>
-                            <a href='?remove={bus}'>삭제 ✖</a>
-                        </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("혼잡도 정보 없음")
-    else:
-        st.info("즐겨찾기한 버스가 없습니다.")
-
-    if st.session_state.selected_bus:
-        st.markdown("---")
-        st.subheader(f"🕒 {st.session_state.selected_bus} 버스 혼잡도 추이")
-        history = get_congestion_history(st.session_state.selected_bus)
-        times = [datetime.fromisoformat(h["timestamp"]) for h in history if h["timestamp"]]
-        values = [h["total_congestion"] for h in history]
-
-        if times and values:
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(times, values, marker='o', color='dodgerblue')
-            ax.set_title("혼잡도 추이")
-            ax.set_xlabel("시간")
-            ax.set_ylabel("혼잡도 (%)")
-            plt.xticks(rotation=45)
-            st.pyplot(fig)
+        docs = db.collection("bus_congestion")\
+            .where("bus_number", "==", bus_no)\
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)\
+            .limit(1).stream()
+        doc = next(docs, None)
+        if doc:
+            data = doc.to_dict()
+            data["timestamp"] = data["timestamp"].isoformat()  # 수정된 부분
+            return jsonify(data)
         else:
-            st.info("표시할 데이터가 없습니다.")
+            return jsonify({"error": "No data found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# ------------------- Search Bus -------------------
-elif selected_page == "Search Bus":
-    st.title("버스 번호로 검색")
+@app.route("/congestion_history/<bus_no>", methods=["GET"])
+def get_congestion_history(bus_no):
+    hours = int(request.args.get("hours", 24))
+    try:
+        threshold = datetime.utcnow() - timedelta(hours=hours)
+        docs = db.collection("bus_congestion")\
+            .where("bus_number", "==", bus_no)\
+            .where("timestamp", ">=", threshold)\
+            .order_by("timestamp")\
+            .stream()
+        history = []
+        for d in docs:
+            d_dict = d.to_dict()
+            history.append({
+                "timestamp": d_dict["timestamp"].isoformat(),  # 수정된 부분
+                "total_congestion": d_dict.get("total_congestion", 0)
+            })
+        return jsonify(history)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    with st.form("bus_search_form"):
-        bus_no = st.text_input("버스 번호 입력")
-        submitted = st.form_submit_button("검색 및 즐겨찾기 추가")
+@app.route("/stations", methods=["GET"])
+def get_stations():
+    try:
+        stations = []
+        docs = db.collection("bus_stations").stream()
+        for d in docs:
+            d_dict = d.to_dict()
+            stations.append({
+                "name": d_dict.get("정류장명"),
+                "lat": float(d_dict.get("위도", 0)),
+                "lon": float(d_dict.get("경도", 0))
+            })
+        return jsonify(stations)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-        if submitted and bus_no:
-            congestion = get_congestion_by_bus_number(bus_no)
-            if congestion:
-                cong = congestion.get("total_congestion", 0)
-                color, status = congestion_status_style(cong)
-                st.markdown(f"<h2 style='color:{color}'>혼잡도: {cong:.1f}% ({status})</h2>", unsafe_allow_html=True)
-
-                if add_favorite_bus(bus_no):
-                    st.success(f"{bus_no} 즐겨찾기 추가됨")
-                    st.session_state.refreshed_search = True
-                    st.experimental_rerun()
-                else:
-                    st.error("즐겨찾기 추가 실패")
-            else:
-                st.warning("해당 버스에 대한 정보가 없습니다.")
-
-# ------------------ Search Station -----------------
-elif selected_page == "Search Station":
-    st.title("정류장 검색")
-    stations = get_all_stations()
-    search_name = st.text_input("정류장명 입력")
-    filtered = [s for s in stations if search_name in s["name"]] if search_name else []
-
-    for s in filtered:
-        st.write(s['name'])
-
-    if filtered:
-        center_lat = filtered[0]['lat']
-        center_lon = filtered[0]['lon']
-        m = folium.Map(location=(center_lat, center_lon), zoom_start=14)
-        for s in filtered:
-            folium.Marker([s["lat"], s["lon"]], popup=s["name"],
-                          icon=folium.Icon(color="blue", icon="bus", prefix="fa")).add_to(m)
-        st_folium(m, width=700)
-    else:
-        st.info("검색 결과가 없습니다.")
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
